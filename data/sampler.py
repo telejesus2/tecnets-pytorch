@@ -8,22 +8,23 @@ support_query_error = ('Tried to sample {} support and query samples, '
 
 class MetaSampler(torch.utils.data.sampler.Sampler):
 
-    def __init__(self, dataset, support_query_size, examples, shuffle=False, replacement=False):
+    def __init__(self, dataset, support_query_size, examples_size, shuffle=False, replacement=False):
         self.dataset = dataset
         self.support_query_size = support_query_size
-        self.examples = examples
+        self.examples_size = examples_size
         self.shuffle = shuffle
         self.replacement = replacement
+
+    def __len__(self):
+        return len(self.dataset)
 
     def __iter__(self):
         for index in self._index_iterator():
             num_examples_of_subtask = self.dataset.len_subtask(index) 
             if num_examples_of_subtask < self.support_query_size:
-                # raise RuntimeError(support_query_error.format(self.support_query_size, num_examples_of_subtask))
-                print(support_query_error.format(self.support_query_size, num_examples_of_subtask))
-                continue
+                raise RuntimeError(support_query_error.format(self.support_query_size, num_examples_of_subtask))
             sample_indices = np.random.choice(num_examples_of_subtask, self.support_query_size, replace=False)
-            ctrnet_timesteps = np.random.randint(0, self.dataset.time_horizon, self.examples, np.int32)
+            ctrnet_timesteps = np.random.randint(0, self.dataset.time_horizon, self.examples_size, np.int32)
             yield [index, sample_indices, ctrnet_timesteps]
 
     def _index_iterator(self):

@@ -14,16 +14,16 @@ import numpy as np
 
 from network.utils import conv_shape, normalization, activation
 
-
-def imitation_loss(output, action):
-        return F.mse_loss(output, action)
-
-
 class ControlNet(nn.Module):
-    def __init__(self, img_shape, state_dim, action_dim, emb_dim,
-                 filters, kernels, strides, paddings, fc_layers,
+    def __init__(self, img_shape, state_dim, action_dim,
+                 emb_dim, filters, kernels, strides, paddings, dilations, fc_layers,
                  norm_conv='layer', norm_fc='group', act='elu', drop_rate_conv=0.0, drop_rate_fc=0.0):
-        """
+        """Convolution layers followed by linear layers
+
+        Input to convolution layers: concatenation of an image (of shape img_shape) and a vector (of dim emb_dim) 
+        Input to linear layers: concatenation of the flattened convolution output and a vector (of dim state_dim)
+        Output: a vector (of dim action_dim)
+
         :param img_shape: (h, w, c)
         """   
         super(ControlNet, self).__init__()
@@ -34,7 +34,7 @@ class ControlNet(nn.Module):
         ### convolution layers   
         num_conv_layers = len(kernels)
         channels = [img_shape[2] + emb_dim] + filters 
-        conv_h, conv_w = conv_shape(img_shape[:2], kernels, paddings, strides)     
+        conv_h, conv_w = conv_shape(img_shape[:2], kernels, paddings, strides, dilations)
         self.conv = nn.ModuleList()
         for i in range(num_conv_layers):
             self.conv.append(nn.Conv2d(

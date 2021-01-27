@@ -1,17 +1,39 @@
 import numpy as np
 import torch.nn as nn
 
-def conv_shape(conv_in_shape, kernel_sizes, padding_sizes, stride_sizes):
+def padding_same(conv_in_shape, kernel_sizes, stride_sizes, dilation_sizes):
     """
         :param conv_in_shape: (h, w)
     """
+    if isinstance(kernel_sizes[0], int): kernel_sizes = [(x, x) for x in kernel_sizes]
+    if isinstance(stride_sizes[0], int): stride_sizes = [(x, x) for x in stride_sizes]
+    if isinstance(dilation_sizes[0], int): dilation_sizes = [(x, x) for x in dilation_sizes]
+
+    h = conv_in_shape[0]
+    w = conv_in_shape[1]
+    padding_sizes = []
+    for (k, s, d) in zip(kernel_sizes, stride_sizes, dilation_sizes):
+        pad_h = int(np.ceil((s[0]*(h - 1) - h + d[0]*(k[0] - 1) + 1) / 2))
+        pad_w = int(np.ceil((s[1]*(w - 1) - w + d[1]*(k[1] - 1) + 1) / 2))
+        padding_sizes.append((pad_h, pad_w))
+    return padding_sizes
+
+def conv_shape(conv_in_shape, kernel_sizes, padding_sizes, stride_sizes, dilation_sizes):
+    """
+        :param conv_in_shape: (h, w)
+    """
+    if isinstance(kernel_sizes[0], int): kernel_sizes = [(x, x) for x in kernel_sizes]
+    if isinstance(padding_sizes[0], int): padding_sizes = [(x, x) for x in padding_sizes]
+    if isinstance(stride_sizes[0], int): stride_sizes = [(x, x) for x in stride_sizes]
+    if isinstance(dilation_sizes[0], int): dilation_sizes = [(x, x) for x in dilation_sizes]
+
     h = conv_in_shape[0]
     w = conv_in_shape[1]
     conv_h = [h]
     conv_w = [w]
-    for (ksize, pad, stride) in zip(kernel_sizes, padding_sizes, stride_sizes):
-        h = int(np.floor((h + 2*pad - (ksize - 1) -1) / stride + 1))
-        w = int(np.floor((w + 2*pad - (ksize - 1) -1) / stride + 1))
+    for (k, p, s, d) in zip(kernel_sizes, padding_sizes, stride_sizes, dilation_sizes):
+        h = int(np.floor((h + 2*p[0] - d[0]*(k[0] - 1) - 1) / s[0] + 1))
+        w = int(np.floor((w + 2*p[1] - d[1]*(k[1] - 1) - 1) / s[1] + 1))
         conv_h.append(h)
         conv_w.append(w)
     return (conv_h, conv_w)

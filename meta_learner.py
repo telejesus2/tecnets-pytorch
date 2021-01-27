@@ -4,106 +4,123 @@ import numpy as np
 
 class MetaLearner(object):
 
-    def __init__(self, emb_net, ctr_net, train_gen, val_gen, optimizer, device):
-        self.emb_net = emb_net
-        self.ctr_net = ctr_net
+    def __init__(self, train_gen, val_gen, emb_mod, ctr_mod, opt,
+                 lambda_embedding=1.0, lambda_support=0.1, lambda_query=0.1):
+        self.emb_mod = emb_mod
+        self.ctr_mod = ctr_mod
         self.train_gen = train_gen
         self.val_gen = val_gen
-        self.optimizer = optimizer
-        self.device = device
+        self.opt = opt
 
-    def mse_loss(actions, labels):
-        """
-        :param actions: shape (N, examples, action_dim)
-        :param labels: shape (N, examples, action_dim)
-        """
-        support_size = actions.shape[1] // 2
-        loss_support = F.mse_loss(actions[:, :support_size], labels[:, :support_size], reduction='mean')
-        loss_query = F.mse_loss(actions[:, support_size:], labels[:, support_size:], reduction='mean')
+        # loss weights
+        self.lambda_embedding = lambda_embedding
+        self.lambda_support = lambda_support
+        self.lambda_query = lambda_query
 
-        loss_support = self.support_lambda * loss_support
-        loss_query = self.query_lambda * loss_query
-        return loss_support, loss_query
+    def meta_train(self, epoch, train_emb=True, train_ctr=True, control=True, writer=None, log_interval=5):
+        if train_ctr and not control:
+            raise RuntimeError('Cannot train the control module without evaluating it.')
+        self.emb_mod.eval()
+        self.ctr_mod.eval()
+        if train_emb:
+            self.emb_mod.train()
+        if train_ctr:
+            self.ctr_mod.train()
 
-    def margin_loss(U_s, q_s, margin=0.1):
-        """
-        :param U_s: mean support embeddings of shape (N, emb_dim)
-        :param q_s: query embeddings of shape (N, q_n, emb_dim)
-        """
-        N = q_s.shape[0]
-        q_s = q_s.view(-1, q_s.shape[-1]) # (N * q_n, emb_dim)
+        running_loss = 0
+        running_size = 0
+        for batch_idx, inputs in enumerate(self.train_gen):
+            self.opt.zero_grad()
+            loss, loss_emb, loss_ctr_q, loss_ctr_U, acc_emb = 0, 0, 0, 0, 0
+
+            emb_outputs = self.emb_mod.forward(inputs) 
+            loss_emb = self.lambda_embedding * emb_outputs['loss_emb']
+            acc_emb = emb_outputs['acc_emb']
+            if train_emb:
+                loss += loss_emb
+
+            if control: 
+                inputs.update(emb_outputs)
+                ctr_outputs = self.ctr_mod.forward(inputs)    
+                loss_ctr_U = self.lambda_support * ctr_outputs['loss_ctr_U']
+                loss_ctr_q = self.lambda_query *  ctr_outputs['loss_ctr_q'] 
+                if train_ctr:
+                    loss += loss_ctr_U + loss_ctr_q
+
+            loss.backward()
+            self.opt.step()
+
+            batch_size = len(inputs[list(inputs)[0]])
+            running_size += batch_size
+            loss_total = loss_emb + loss_ctr_U + loss_ctr_q
+            if batch_idx % log_interval == 0:
+                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t\tTot: {:.6f}\tEmb: {:.6f}\tCtrQ: {:.6f}\tCtrU: {:.6f}'.format( 
+                    epoch, running_size, len(self.train_gen.dataset), 100. * (batch_idx + 1) / len(self.train_gen),
+                    loss.data.item(), loss_total.data.item(), loss_emb.data.item(), loss_ctr_q.data.item(), loss_ctr_U.data.item()))
+
+            if writer is not None:
+                writer.add_scalar('loss', loss, epoch)
+                writer.add_scalar('loss_emb', loss_emb, epoch)
+                writer.add_scalar('loss_ctr_U', loss_ctr_U, epoch)
+                writer.add_scalar('loss_ctr_q', loss_ctr_q, epoch)
+                writer.add_scalar('loss_all', loss_total, epoch)
+
+    def meta_valid(self, epoch, train_emb=True, train_ctr=True, control=True, writer=None):
+        self.emb_mod.eval()
+        self.ctr_mod.eval()
+        with torch.no_grad():
+            
+            val_loss, val_loss_emb, val_loss_ctr_q, val_loss_ctr_U, val_acc_emb = 0, 0, 0, 0, 0
+            for batch_idx, inputs in enumerate(self.val_gen):
+                loss, loss_emb, loss_ctr_q, loss_ctr_U, acc_emb = 0, 0, 0, 0, 0
+
+                emb_outputs = self.emb_mod.forward(inputs) 
+                loss_emb = self.lambda_embedding * emb_outputs['loss_emb']
+                acc_emb = emb_outputs['acc_emb']
+                if train_emb:
+                    loss += loss_emb
         
-        # Similarities of every support mean sentence with every query sentence
-        similarities = torch.mm(U_s, torch.transpose(q_s, 0, 1)) # (N, N * q_n)
-        similarities = similarities.view(N, N, -1) # (N, N, q_n)
+                if control:
+                    inputs.update(emb_outputs)
+                    ctr_outputs = self.ctr_mod.forward(inputs)    
+                    loss_ctr_U = self.lambda_support * ctr_outputs['loss_ctr_U']
+                    loss_ctr_q = self.lambda_query *  ctr_outputs['loss_ctr_q']
+                    if train_ctr:
+                        loss += loss_ctr_U + loss_ctr_q
 
-        # Gets the diagonal
-        mask_pos = torch.eye(N) == 1
-        positives = similarities[mask_pos, :] # (N, q_n)
-        positives_ex = positives.view(N, 1, -1) # (N, 1, q_n)
+                batch_size = len(inputs[list(inputs)[0]])
+                val_loss += loss * batch_size
+                val_loss_emb += loss_emb * batch_size
+                val_loss_ctr_U += loss_ctr_U * batch_size
+                val_loss_ctr_q += loss_ctr_q * batch_size
+                val_acc_emb += acc_emb * batch_size
 
-        # Gets everything but the diagonal
-        mask_neg = torch.eye(N) == 0
-        negatives = similarities[mask_neg, :] # (N * (N - 1), q_n)
-        negatives = negatives.view(N, N - 1, -1) # (N, N - 1, q_n)
+            val_loss /= len(self.val_gen.dataset)
+            val_loss_emb /= len(self.val_gen.dataset)
+            val_loss_ctr_U /= len(self.val_gen.dataset)
+            val_loss_ctr_q /= len(self.val_gen.dataset)
+            val_acc_emb /= len(self.val_gen.dataset)
+            val_loss_total = val_loss_emb + val_loss_ctr_U + val_loss_ctr_q
+            print('\nValidation set: Average loss: {:.4f} (Tot: {:.4f}, Emb: {:.4f}, CtrQ: {:.4f}, CtrU: {:.4f}), Embedding Accuracy: {:.4f}\n'.format(
+                val_loss, val_loss_total, val_loss_emb, val_loss_ctr_q, val_loss_ctr_U, val_acc_emb))
 
-        loss = torch.clamp(margin - positives_ex + negatives, min=0.0)
-        loss = torch.mean(loss)
+            if writer is not None:
+                writer.add_scalar('loss', val_loss, epoch)
+                writer.add_scalar('loss_emb', val_loss_emb, epoch)
+                writer.add_scalar('loss_ctr_U', val_loss_ctr_U, epoch)
+                writer.add_scalar('loss_ctr_q', val_loss_ctr_q, epoch)
+                writer.add_scalar('loss_all', val_loss_total, epoch)
+                writer.add_scalar('acc_emb', val_acc_emb, epoch)
 
-        # loss
-        self.loss_embedding = self.loss_lambda * loss
+    def resume(self, log_dir, epoch, device):
+        self.emb_mod.load(log_dir + '/model_emb_' + str(epoch) + '.pt', device)
+        self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
+        self.opt.load_state_dict(torch.load(log_dir + '/model_opt_' + str(epoch) + '.pt', map_location=device))
 
-        # accuracy
-        max_of_negs = torch.max(negatives, dim=1).values  # (N, q_n)
-        accuracy = torch.greater(positives, max_of_negs).float()
-        accuracy = torch.mean(accuracy)
+    def save(self, log_dir, epoch):
+        self.emb_mod.save(log_dir + '/model_emb_' + str(epoch) + '.pt')
+        self.ctr_mod.save(log_dir + '/model_ctr_' + str(epoch) + '.pt')
+        torch.save(self.opt.state_dict(), log_dir + '/model_opt_' + str(epoch) + '.pt')
 
-        return loss, accuracy
-
-    def _norm(vecs, dim=1):
-        mag = torch.sqrt(torch.sum(torch.square(vecs), dim, keepdim=True))
-        return vecs / torch.clamp(mag, min=1e-6)
-
-    def meta_train(self, epoch):
-        loss_emb_list, loss_ctr_U_list, loss_ctr_q_list, loss_list = [], [], [], []
-
-        for i, tasks in enumerate(self.train_gen):
-
-            loss_emb, loss_ctr_U, loss_ctr_q = 0, 0, 0
-
-            # compute embeddings
-            embnet_images = tasks['embnet_images'] # (N, U_n + q_n, frames, img_shape) where img_shape = (h, w, c)
-            batch_size, support_query_size = embnet_images.shape[:2]
-            embnet_images = torch.cat(torch.unbind(embnet_images, dim=2), dim=-1) # (N, U_n + q_n, h, w, c * frames)
-            embnet_images = embnet_images.view([-1] + list(embnet_images.shape[2:])) # (N * (U_n + q_n), h, w, c * frames)
-            
-            sentences = emb_net(embnet_images) # (N * (U_n + q_n), emb_dim)
-            sentences = sentences.view(batch_size, support_query_size, -1) # (N, U_n + q_n, emb_dim)
-
-            q_s = sentences[:, support_size:] # (N, q_n, emb_dim)
-            U_s = sentences[:, :support_size] # (N, U_n, emb_dim)
-            U_s = _norm(torch.mean(_norm(U_s, dim=2), dim=1), dim=1) # (N, emb_dim)
-            emb_dim = U_s.shape[-1]
-
-            # embedding loss
-            loss, accuracy = margin_loss(U_s, q_s)
-     
-            # compute actions
-            ctrnet_images = tasks['ctrnet_images'] # (N, examples, img_shape) where img_shape = (h, w, c)
-            examples = ctrnet_images.shape[1]
-            ctrnet_images = ctrnet_images.view([-1] + list(ctrnet_images.shape[2:])) # (N * examples, h, w, c)
-
-            U_s = U_s.view(-1, 1, emb_dim).expand(-1, examples, emb_dim) # (N, examples, emb_dim)
-            U_s = U_s.view(-1, emb_dim) # (N * examples, emb_dim)
-    
-            states = tasks['ctrnet_states'] # (N, examples, state_dim)
-            states = states.view(-1, states.shape[-1]) # (N * examples, state_dim)
-
-            actions_pred = ctr_net(ctrnet_images, U_s, states) # (N * examples, action_dim)
-    
-            actions_pred = actions_pred.view(-1, examples, actions_pred[-1]) # (N, examples, action_dim)
-
-            # control loss
-            actions_labels = tasks['ctrnet_actions'] # (N, examples, action_dim)
-            loss_ctr_U, loss_ctr_q = mse_loss(actions_pred, actions_labels)
-            
+    def evaluate(self):
+        self.eval.evaluate(self.emb_mod, self.ctr_mod)

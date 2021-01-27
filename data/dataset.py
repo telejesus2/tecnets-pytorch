@@ -130,6 +130,7 @@ class MetaSubset(torch.utils.data.Dataset):
         self.img_shape = dataset.img_shape
         self.state_dim = dataset.state_dim 
         self.action_dim = dataset.action_dim
+        self.frames = dataset.frames
 
     def __getitem__(self, idx):
         idx[0] = self.indices[idx[0]]

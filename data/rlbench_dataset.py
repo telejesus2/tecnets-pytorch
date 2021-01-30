@@ -58,7 +58,7 @@ class RLBenchDataset(MetaDataset):
     def _build_images(self, hdf5_file):
         return hdf5_file['front_rgb'][...]
 
-    def _preprocess_image(self, img):
+    def preprocess_image(self, img):
         # [0, 1] to [-1, 1]
         return (img * 2.) - 1.
 

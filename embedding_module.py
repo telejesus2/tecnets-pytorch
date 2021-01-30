@@ -20,7 +20,7 @@ class EmbeddingModule(object):
         self.margin = margin
         self.emb_dim = emb_dim
         self.support_size = data_sizes['support_size']
-        self.query_size = data_sizes['query_size']
+        self.support_query_size = 0 # overriden in forward() 
 
     def parameters(self):
         return self.emb_net.parameters()
@@ -28,8 +28,8 @@ class EmbeddingModule(object):
     def eval(self):
         self.emb_net.eval()
 
-    def train(self):
-        self.emb_net.train()
+    def train(self, train=True):
+        self.emb_net.train(train)
 
     def save(self, model_path):
         torch.save(self.emb_net.state_dict(), model_path)
@@ -81,34 +81,34 @@ class EmbeddingModule(object):
         """
         :param embnet_images: shape (N, U_n + q_n, frames, h, w, c)
 
-        :return U_s: shape (N, emb_dim)
-        :return q_s: shape (N, q_n, emb_dim)
+        :return sentences: shape (N, U_n + q_n, emb_dim)
         """
         embnet_images = torch.cat(torch.unbind(embnet_images, dim=2), dim=-1) # (N, U_n + q_n, h, w, c * frames)
         embnet_images = embnet_images.view([-1] + list(embnet_images.shape[2:])) # (N * (U_n + q_n), h, w, c * frames)
         
         sentences = self.emb_net(embnet_images) # (N * (U_n + q_n), emb_dim)
-        sentences = sentences.view(-1, self.support_size + self.query_size, self.emb_dim) # (N, U_n + q_n, emb_dim)
+        sentences = sentences.view(-1, self.support_query_size, self.emb_dim) # (N, U_n + q_n, emb_dim)
 
-        q_s = sentences[:, self.support_size:] # (N, q_n, emb_dim)
-        U_s = sentences[:, : self.support_size] # (N, U_n, emb_dim)
-        U_s = self._norm(torch.mean(self._norm(U_s, dim=2), dim=1), dim=1) # (N, emb_dim)
-
-        return U_s, q_s
+        return sentences
 
     def forward(self, inputs, eval=False):
         # load data
         embnet_images = inputs['embnet_images'].to(self.device) # (N, U_n + q_n, frames, img_shape) where img_shape = (h, w, c)
+        self.support_query_size = embnet_images.shape[1]
 
         # compute embeddings
-        U_s, q_s = self._compute_embeddings(embnet_images)
-
+        sentences = self._compute_embeddings(embnet_images) # (N, U_n + q_n, emb_dim)
+        
         if eval:
             return {
-                'support_embeddings': U_s
+                'sentences': sentences,
+                'support_embeddings': self._norm(torch.mean(self._norm(sentences, dim=2), dim=1), dim=1) # (N, emb_dim)
             }
 
         # embedding loss
+        q_s = sentences[:, self.support_size:] # (N, q_n, emb_dim)
+        U_s = sentences[:, :self.support_size] # (N, U_n, emb_dim)
+        U_s = self._norm(torch.mean(self._norm(U_s, dim=2), dim=1), dim=1) # (N, emb_dim)
         loss_emb, acc_emb = self._cos_hinge_loss(U_s, q_s, margin=self.margin)
 
         return {
@@ -116,4 +116,3 @@ class EmbeddingModule(object):
             'loss_emb': loss_emb,
             'acc_emb': acc_emb,
         }
-        

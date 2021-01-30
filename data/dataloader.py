@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader
 
 class MetaDataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset, support_size, query_size, examples_size, shuffle=True, replacement=False,
-                 batch_size=1, num_workers=0):
+                 batch_size=1, num_workers=0, prefetch_factor=2):
 
         self.support_size = support_size
         self.query_size = query_size
@@ -23,4 +23,4 @@ class MetaDataLoader(torch.utils.data.DataLoader):
         sampler = MetaSampler(dataset, support_size + query_size, examples_size, shuffle, replacement)
 
         super(MetaDataLoader, self).__init__(dataset, batch_size=batch_size,
-            sampler=sampler, num_workers=num_workers)
+            sampler=sampler, num_workers=num_workers, prefetch_factor=prefetch_factor)

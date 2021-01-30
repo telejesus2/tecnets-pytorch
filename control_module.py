@@ -18,7 +18,7 @@ class ControlModule(object):
 
         self.device = device
         self.emb_dim = emb_dim
-        self.examples_size = data_sizes['examples_size']
+        self.examples_size = 0 # overriden in forward()
 
     def parameters(self):
         return self.ctr_net.parameters()
@@ -26,8 +26,8 @@ class ControlModule(object):
     def eval(self):
         self.ctr_net.eval()
 
-    def train(self):
-        self.ctr_net.train()
+    def train(self, train=True):
+        self.ctr_net.train(train)
 
     def save(self, model_path):
         torch.save(self.ctr_net.state_dict(), model_path)
@@ -69,6 +69,7 @@ class ControlModule(object):
         ctrnet_images = inputs['ctrnet_images'].to(self.device) # (N, examples_size, img_shape) where img_shape = (h, w, c)  
         states = inputs['ctrnet_states'].float().to(self.device) # (N, examples_size, state_dim)
         U_s = inputs['support_embeddings'] # (N, emb_dim)
+        self.examples_size = ctrnet_images.shape[1]
 
         # compute actions
         actions_pred = self._compute_actions(U_s, ctrnet_images, states) # (N, examples_size, action_dim)

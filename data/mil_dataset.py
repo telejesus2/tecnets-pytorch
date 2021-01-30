@@ -43,6 +43,6 @@ class MILDataset(MetaDataset):
     def _load_image(self, images_path, timestep):
         return np.array(Image.open(images_path + '/' + str(timestep) + '.gif').convert("RGB"))
 
-    def _preprocess_image(self, img):
+    def preprocess_image(self, img):
         # [0, 255] to [-1, 1]
         return ((img.astype('float32') / 255.) * 2.) -1.

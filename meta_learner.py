@@ -1,16 +1,20 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
+import matplotlib.pyplot as plt
+
 
 class MetaLearner(object):
 
-    def __init__(self, train_gen, val_gen, emb_mod, ctr_mod, opt,
+    def __init__(self, train_gen, val_gen, emb_mod, ctr_mod, opt, eval_sim=None, eval_emb=None,
                  lambda_embedding=1.0, lambda_support=0.1, lambda_query=0.1):
         self.emb_mod = emb_mod
         self.ctr_mod = ctr_mod
         self.train_gen = train_gen
         self.val_gen = val_gen
         self.opt = opt
+        self.eval_sim = eval_sim
+        self.eval_emb = eval_emb
 
         # loss weights
         self.lambda_embedding = lambda_embedding
@@ -20,12 +24,12 @@ class MetaLearner(object):
     def meta_train(self, epoch, train_emb=True, train_ctr=True, control=True, writer=None, log_interval=5):
         if train_ctr and not control:
             raise RuntimeError('Cannot train the control module without evaluating it.')
-        self.emb_mod.eval()
-        self.ctr_mod.eval()
-        if train_emb:
-            self.emb_mod.train()
-        if train_ctr:
-            self.ctr_mod.train()
+        self.emb_mod.train(train_emb)
+        self.ctr_mod.train(train_ctr)
+        for param in self.emb_mod.parameters():
+            param.requires_grad = train_emb
+        for param in self.ctr_mod.parameters():
+            param.requires_grad = train_ctr
 
         running_loss = 0
         running_size = 0
@@ -48,13 +52,24 @@ class MetaLearner(object):
                     loss += loss_ctr_U + loss_ctr_q
 
             loss.backward()
+            
+            # self.plot_grad_flow(self.emb_mod.emb_net.named_parameters())
+
+            # for name, param in self.emb_mod.emb_net.named_parameters():
+            #     print(name, param.grad.norm())
+
+            # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
+
             self.opt.step()
+            # for p in model.parameters():
+            #     p.data.add_(p.grad, alpha=-lr)
 
             batch_size = len(inputs[list(inputs)[0]])
             running_size += batch_size
             loss_total = loss_emb + loss_ctr_U + loss_ctr_q
             if batch_idx % log_interval == 0:
-                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\t\tTot: {:.6f}\tEmb: {:.6f}\tCtrQ: {:.6f}\tCtrU: {:.6f}'.format( 
+                 print('Train Epoch: {} \t[{}/{} \t({:.0f}%)]\tLoss: {:.6f}\tTot: {:.6f}\tEmb: {:.6f}\tCtrQ: {:.6f}\tCtrU: {:.6f}'.format( 
                     epoch, running_size, len(self.train_gen.dataset), 100. * (batch_idx + 1) / len(self.train_gen),
                     loss.data.item(), loss_total.data.item(), loss_emb.data.item(), loss_ctr_q.data.item(), loss_ctr_U.data.item()))
 
@@ -122,5 +137,31 @@ class MetaLearner(object):
         self.ctr_mod.save(log_dir + '/model_ctr_' + str(epoch) + '.pt')
         torch.save(self.opt.state_dict(), log_dir + '/model_opt_' + str(epoch) + '.pt')
 
-    def evaluate(self):
-        self.eval.evaluate(self.emb_mod, self.ctr_mod)
+    def evaluate(self, epoch, writer=None):
+        if self.eval_emb is not None:
+            self.eval_emb.evaluate(epoch, self.emb_mod, writer=writer)
+        if self.eval_sim is not None:
+            _ = self.eval_sim.evaluate(epoch, self.emb_mod, self.ctr_mod)
+
+
+
+
+
+
+
+
+    # def plot_grad_flow(self, named_parameters):
+    #     ave_grads = []
+    #     layers = []
+    #     for n, p in named_parameters:
+    #         if(p.requires_grad) and ("bias" not in n):
+    #             layers.append(n)
+    #             ave_grads.append(p.grad.abs().mean())
+    #     plt.plot(ave_grads, alpha=0.3, color="b")
+    #     plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
+    #     plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
+    #     plt.xlim(xmin=0, xmax=len(ave_grads))
+    #     plt.xlabel("Layers")
+    #     plt.ylabel("average gradient")
+    #     plt.title("Gradient flow")
+    #     plt.grid(True)

@@ -47,8 +47,13 @@ class MetaDataset(torch.utils.data.Dataset):
     def _preload_images(self, images_paths):
         pass
 
-    def _preprocess_image(self, img):
+    def preprocess_image(self, img):
+        # to [-1, 1]
         pass
+
+    def postprocess_image(self, img):
+        # [-1, 1] to [0, 1]
+        return (img + 1) / 2.
  
     def __getitem__(self, index):
         subtask_index = index[0]
@@ -89,12 +94,12 @@ class MetaDataset(torch.utils.data.Dataset):
         ctrnet_actions += [actions[-1][t] for t in q_ctrnet_timesteps]
 
         return {
-            'embnet_images': self._preprocess_image(np.array(embnet_images)),   # (support_query_size, frames, img_shape)
+            'embnet_images': self.preprocess_image(np.array(embnet_images)),   # (support_query_size, frames, img_shape)
             'embnet_states': np.array(embnet_states),                           # (support_query_size, frames, state_dim)
             'embnet_actions': np.array(embnet_actions),                         # (support_query_size, frames, action_dim)
-            'ctrnet_images': self._preprocess_image(np.array(ctrnet_images)),   # (examples, img_shape)
-            'ctrnet_states': np.array(ctrnet_states),                           # (examples, state_dim)
-            'ctrnet_actions': np.array(ctrnet_actions),                         # (examples, action_dim)
+            'ctrnet_images': self.preprocess_image(np.array(ctrnet_images)),   # (examples_size, img_shape)
+            'ctrnet_states': np.array(ctrnet_states),                           # (examples_size, state_dim)
+            'ctrnet_actions': np.array(ctrnet_actions),                         # (examples_size, action_dim)
         }
     
     def _sequence_data(self, images_path, states, actions):

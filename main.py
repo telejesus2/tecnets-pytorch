@@ -24,125 +24,130 @@ from network.utils import padding_same, conv_shape
 from eval.mil_reach_eval_sim import EvalSimMilReach
 from eval.eval_emb import EvalEmbedding
 
-#============================================================================================#
-# Data
-#============================================================================================#
+if __name__ == "__main__":
 
-train_size = 1500 #1500
-val_size = 128 #128
-batch_size = 64 #64
-support_size = 2 #2
-query_size = 2 #2
-examples_size = 2 #2
+    #============================================================================================#
+    # Data
+    #============================================================================================#
 
-# training_dataset = RLBenchDataset('ReachTarget', 'first_last')
-training_dataset = MILDataset('mil_sim_reach', 'first_last')
-train_dataset, val_dataset = random_split(training_dataset, [train_size, val_size])
+    train_size = 1500 #1500
+    val_size = 128 #128
+    batch_size = 256 #64 256
+    support_size = 2 #2
+    query_size = 2 #2
+    examples_size = 10 #2
 
-loader_params = {'batch_size': batch_size,
-                 'replacement': False, 
-                 'shuffle': True,
-                 'num_workers': 4,
-                 'prefetch_factor': 4}
+    # training_dataset = RLBenchDataset('ReachTarget', 'first_last')
+    training_dataset = MILDataset('mil_sim_reach', 'first_last')
+    train_dataset, val_dataset = random_split(training_dataset, [train_size, val_size])
 
-train_gen = MetaDataLoader(train_dataset, support_size, query_size, examples_size, **loader_params)
-val_gen = MetaDataLoader(val_dataset, support_size, query_size, examples_size, **loader_params)
+    loader_params = {'batch_size': batch_size,
+                    'replacement': False, 
+                    'shuffle': True,
+                    'num_workers': 8, #8
+                    'prefetch_factor': 2,
+                    'pin_memory': True}
 
-data_sizes = {'support_size': train_gen.support_size,
-              'query_size': train_gen.query_size, 
-              'examples_size': train_gen.examples_size,
-              'img_shape': train_dataset.img_shape,
-              'time_horizon': train_dataset.time_horizon,
-              'img_shape': train_dataset.img_shape,
-              'state_dim': train_dataset.state_dim,
-              'action_dim': train_dataset.action_dim,
-              'frames': train_dataset.frames}
+    train_gen = MetaDataLoader(train_dataset, support_size, query_size, examples_size, **loader_params)
+    val_gen = MetaDataLoader(val_dataset, support_size, query_size, examples_size, **loader_params)
 
-#============================================================================================#
-# Eval
-#============================================================================================#
+    data_sizes = {'support_size': train_gen.support_size,
+                'query_size': train_gen.query_size, 
+                'examples_size': train_gen.examples_size,
+                'img_shape': train_dataset.img_shape,
+                'time_horizon': train_dataset.time_horizon,
+                'img_shape': train_dataset.img_shape,
+                'state_dim': train_dataset.state_dim,
+                'action_dim': train_dataset.action_dim,
+                'frames': train_dataset.frames}
 
-eval = True
+    #============================================================================================#
+    # Eval
+    #============================================================================================#
 
-log_dir = './logs/' + datetime.now().strftime('%m%d-%H%M%S')
-if not os.path.exists(log_dir):
-    os.makedirs(log_dir)
+    eval = True
 
-test_dataset = MILDataset('mil_sim_reach', 'first_last', 'test')
-# test_dataset = RLBenchDataset('ReachTarget', 'first_last', 'test')
+    log_dir = './logs/' + datetime.now().strftime('%m%d-%H%M%S')
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-eval_sim = EvalSimMilReach(test_dataset, 10, 10, support_size, log_dir=log_dir, record_gifs=True, render=True)
-eval_emb = EvalEmbedding(test_dataset, 10, 4)
+    test_dataset = MILDataset('mil_sim_reach', 'first_last', 'test')
+    # test_dataset = RLBenchDataset('ReachTarget', 'first_last', 'test')
 
-#============================================================================================#
-# Networks
-#============================================================================================#
+    eval_sim = EvalSimMilReach(test_dataset, 10, 10, support_size, log_dir=log_dir, record_gifs=True, render=True)
+    eval_emb = EvalEmbedding(test_dataset, 10, 4)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(device)
+    #============================================================================================#
+    # Networks
+    #============================================================================================#
 
-emb_dim = 20
-filters = [40,40,40] 
-kernels = [3,3,3] 
-strides = [2,2,2]
-dilations = [1, 1, 1]
-# paddings = padding_same(data_sizes['img_shape'][:2], kernels, strides, dilations)
-paddings = [2,2,2]
-fc_layers = [200,200,200,200]
-margin = 0.1
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print(device)
 
-emb_mod = EmbeddingModule(data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device, margin)
-ctr_mod = ControlModule(data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device)
+    emb_dim = 20
+    filters = [40,40,40] 
+    kernels = [3,3,3] 
+    strides = [2,2,2]
+    dilations = [1,1,1]
+    # paddings = padding_same(data_sizes['img_shape'][:2], kernels, strides, dilations)
+    paddings = [2,2,2]
+    fc_layers = [200,200,200,200]
+    margin = 0.1
 
-#============================================================================================#
-# Optimizer and Learner
-#============================================================================================#
+    emb_mod = EmbeddingModule(data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device, margin)
+    ctr_mod = ControlModule(data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device)
 
-lr = 0.0005
-params = list(emb_mod.parameters()) + list(ctr_mod.parameters())
+    #============================================================================================#
+    # Optimizer and Learner
+    #============================================================================================#
 
-opt = optim.Adam(params, lr=lr) # TODO should i have one optimizer per network ?
-# scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[7, 30, 70], gamma=0.8)
+    lr = 0.0005
+    params = list(emb_mod.parameters()) + list(ctr_mod.parameters())
 
-loss_params = {'lambda_embedding': 0.1,
-               'lambda_support': 1.0, 
-               'lambda_query': 1.0}
+    opt = optim.Adam(params, lr=lr) # TODO should i have one optimizer per network ?
+    # scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[7, 30, 70], gamma=0.8)
 
-meta_learner = MetaLearner(train_gen, val_gen, emb_mod, ctr_mod, opt, eval_sim, eval_emb, **loss_params)
+    loss_params = {'lambda_embedding': 1.0,
+                'lambda_support': 1.0, 
+                'lambda_query': 1.0}
 
-#============================================================================================#
-# Training
-#============================================================================================#
+    meta_learner = MetaLearner(train_gen, val_gen, emb_mod, ctr_mod, opt, eval_sim, eval_emb, **loss_params)
 
-epochs = 200000 # 400000
-resume_epoch = 103000
-SAVE_INTERVAL = 1000
-EVAL_INTERVAL = 10000
+    #============================================================================================#
+    # Training
+    #============================================================================================#
 
-if resume_epoch > 0:
-    print("resuming...")
-    meta_learner.resume('./logs/0130-110242', resume_epoch, device)
+    epochs = 400000 #200000 # 400000
+    resume_epoch = 0 # 50000
+    SAVE_INTERVAL = 1000
+    EVAL_INTERVAL = 10000
+    VAL_INTERVAL = 10
 
-train_writer = SummaryWriter("./runs/_train")
-valid_writer = SummaryWriter("./runs/_valid")
-emb_writer = SummaryWriter("./runs/_embed")
+    if resume_epoch > 0:
+        print("resuming...")
+        meta_learner.resume('./logs/0202-225632', resume_epoch, device)
 
-# meta_learner.meta_train(0, train_emb=False, writer=None, log_interval=10)
-# meta_learner.evaluate(resume_epoch, writer=emb_writer)
+    train_writer = SummaryWriter("./runs3/_train")
+    valid_writer = SummaryWriter("./runs3/_valid")
+    emb_writer = SummaryWriter("./runs3/_embed")
 
-# start = time.time()
-for epoch in range(resume_epoch + 1, epochs + 1):
-    #scheduler.step()
-    print("# {}".format(epoch))
-    meta_learner.meta_train(epoch, train_emb=True, writer=train_writer, log_interval=10)
-    meta_learner.meta_valid(epoch, train_emb=True, writer=valid_writer)
-    if epoch % SAVE_INTERVAL == 0:
-        meta_learner.save(log_dir, epoch)
-    if epoch % EVAL_INTERVAL == 0 and eval:
-        meta_learner.evaluate(epoch, writer=emb_writer)
-    # if epoch % 10 == 0:
-    #     print(time.time() - start)
-    #     start = time.time()
+    # meta_learner.meta_train(0, train_emb=False, writer=None, log_interval=10)
+    # meta_learner.evaluate(resume_epoch, writer=emb_writer)
+
+    start = time.time()
+    for epoch in range(resume_epoch + 1, epochs + 1):
+        #scheduler.step()
+        print("# {}".format(epoch))
+        meta_learner.meta_train(epoch, train_emb=True, writer=train_writer, log_interval=2)
+        if epoch % VAL_INTERVAL == 0:
+            meta_learner.meta_valid(epoch, train_emb=True, writer=valid_writer)
+        if epoch % SAVE_INTERVAL == 0:
+            meta_learner.save(log_dir, epoch)
+        if epoch % EVAL_INTERVAL == 0 and eval:
+            meta_learner.evaluate(epoch, writer=emb_writer)
+        # if epoch % 10 == 0:
+        #     print(time.time() - start)
+        #     start = time.time()
         
 
 

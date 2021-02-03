@@ -21,7 +21,7 @@ class MetaLearner(object):
         self.lambda_support = lambda_support
         self.lambda_query = lambda_query
 
-    def meta_train(self, epoch, train_emb=True, train_ctr=True, control=True, writer=None, log_interval=5):
+    def meta_train(self, epoch, train_emb=True, train_ctr=True, control=True, writer=None, log_interval=10):
         if train_ctr and not control:
             raise RuntimeError('Cannot train the control module without evaluating it.')
         self.emb_mod.train(train_emb)
@@ -34,7 +34,6 @@ class MetaLearner(object):
         running_loss = 0
         running_size = 0
         for batch_idx, inputs in enumerate(self.train_gen):
-            self.opt.zero_grad()
             loss, loss_emb, loss_ctr_q, loss_ctr_U, acc_emb = 0, 0, 0, 0, 0
 
             emb_outputs = self.emb_mod.forward(inputs) 
@@ -51,19 +50,17 @@ class MetaLearner(object):
                 if train_ctr:
                     loss += loss_ctr_U + loss_ctr_q
 
+            self.opt.zero_grad()
             loss.backward()
             
-            # self.plot_grad_flow(self.emb_mod.emb_net.named_parameters())
+            # self.plot_grad_flow(self.ctr_mod.ctr_net.named_parameters())
 
             # for name, param in self.emb_mod.emb_net.named_parameters():
             #     print(name, param.grad.norm())
 
-            # `clip_grad_norm` helps prevent the exploding gradient problem in RNNs / LSTMs.
             # torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
 
             self.opt.step()
-            # for p in model.parameters():
-            #     p.data.add_(p.grad, alpha=-lr)
 
             batch_size = len(inputs[list(inputs)[0]])
             running_size += batch_size
@@ -143,13 +140,6 @@ class MetaLearner(object):
         if self.eval_sim is not None:
             _ = self.eval_sim.evaluate(epoch, self.emb_mod, self.ctr_mod)
 
-
-
-
-
-
-
-
     # def plot_grad_flow(self, named_parameters):
     #     ave_grads = []
     #     layers = []
@@ -165,3 +155,4 @@ class MetaLearner(object):
     #     plt.ylabel("average gradient")
     #     plt.title("Gradient flow")
     #     plt.grid(True)
+    #     plt.show()

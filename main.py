@@ -117,15 +117,15 @@ if __name__ == "__main__":
     # Training
     #============================================================================================#
 
-    epochs = 400000 #200000 # 400000
-    resume_epoch = 0 # 50000
+    epochs = 400000 # 400000
+    resume_epoch = 41000 
     SAVE_INTERVAL = 1000
     EVAL_INTERVAL = 10000
     VAL_INTERVAL = 10
 
     if resume_epoch > 0:
         print("resuming...")
-        meta_learner.resume('./logs/0202-225632', resume_epoch, device)
+        meta_learner.resume('./logs/0203-001353', resume_epoch, device)
 
     train_writer = SummaryWriter("./runs3/_train")
     valid_writer = SummaryWriter("./runs3/_valid")
@@ -138,9 +138,9 @@ if __name__ == "__main__":
     for epoch in range(resume_epoch + 1, epochs + 1):
         #scheduler.step()
         print("# {}".format(epoch))
-        meta_learner.meta_train(epoch, train_emb=True, writer=train_writer, log_interval=2)
+        meta_learner.meta_train(epoch, train_emb=True, train_ctr=True, writer=train_writer, log_interval=2)
         if epoch % VAL_INTERVAL == 0:
-            meta_learner.meta_valid(epoch, train_emb=True, writer=valid_writer)
+            meta_learner.meta_valid(epoch, train_emb=True, train_ctr=True, writer=valid_writer)
         if epoch % SAVE_INTERVAL == 0:
             meta_learner.save(log_dir, epoch)
         if epoch % EVAL_INTERVAL == 0 and eval:

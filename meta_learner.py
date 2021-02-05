@@ -1,8 +1,7 @@
 import torch
 import torch.nn.functional as F
 import numpy as np
-import matplotlib.pyplot as plt
-
+from network.utils import plot_grad_flow, register_hooks
 
 class MetaLearner(object):
 
@@ -36,6 +35,8 @@ class MetaLearner(object):
         for batch_idx, inputs in enumerate(self.train_gen):
             loss, loss_emb, loss_ctr_q, loss_ctr_U, acc_emb = 0, 0, 0, 0, 0
 
+            # torch.autograd.set_detect_anomaly(True)
+
             emb_outputs = self.emb_mod.forward(inputs) 
             loss_emb = self.lambda_embedding * emb_outputs['loss_emb']
             acc_emb = emb_outputs['acc_emb']
@@ -51,16 +52,21 @@ class MetaLearner(object):
                     loss += loss_ctr_U + loss_ctr_q
 
             self.opt.zero_grad()
+            # loss.register_hook(lambda grad: print(grad))
+            # register_hooks(loss)
             loss.backward()
             
-            # self.plot_grad_flow(self.ctr_mod.ctr_net.named_parameters())
-
-            # for name, param in self.emb_mod.emb_net.named_parameters():
+            # plot_grad_flow(self.ctr_mod.ctr_net.named_parameters(), 'ctr')
+            # plot_grad_flow(self.emb_mod.emb_net.named_parameters(), 'emb')
+            # for name, param in self.ctr_mod.ctr_net.named_parameters():
             #     print(name, param.grad.norm())
-
-            # torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip)
-
+            # clip gradients
+            # torch.nn.utils.clip_grad_norm_(model.parameters(), val)
+            # for param in model.parameters():
+            #     param.register_hook(lambda grad: grad.clamp_(-val, val))
             self.opt.step()
+
+            # torch.autograd.set_detect_anomaly(False)
 
             batch_size = len(inputs[list(inputs)[0]])
             running_size += batch_size
@@ -139,20 +145,3 @@ class MetaLearner(object):
             self.eval_emb.evaluate(epoch, self.emb_mod, writer=writer)
         if self.eval_sim is not None:
             _ = self.eval_sim.evaluate(epoch, self.emb_mod, self.ctr_mod)
-
-    # def plot_grad_flow(self, named_parameters):
-    #     ave_grads = []
-    #     layers = []
-    #     for n, p in named_parameters:
-    #         if(p.requires_grad) and ("bias" not in n):
-    #             layers.append(n)
-    #             ave_grads.append(p.grad.abs().mean())
-    #     plt.plot(ave_grads, alpha=0.3, color="b")
-    #     plt.hlines(0, 0, len(ave_grads)+1, linewidth=1, color="k" )
-    #     plt.xticks(range(0,len(ave_grads), 1), layers, rotation="vertical")
-    #     plt.xlim(xmin=0, xmax=len(ave_grads))
-    #     plt.xlabel("Layers")
-    #     plt.ylabel("average gradient")
-    #     plt.title("Gradient flow")
-    #     plt.grid(True)
-    #     plt.show()

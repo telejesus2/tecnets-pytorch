@@ -132,8 +132,8 @@ class MetaLearner(object):
 
     def resume(self, log_dir, epoch, device):
         self.emb_mod.load(log_dir + '/model_emb_' + str(epoch) + '.pt', device)
-        self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
-        self.opt.load_state_dict(torch.load(log_dir + '/model_opt_' + str(epoch) + '.pt', map_location=device))
+        # self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
+        # self.opt.load_state_dict(torch.load(log_dir + '/model_opt_' + str(epoch) + '.pt', map_location=device))
 
     def save(self, log_dir, epoch):
         self.emb_mod.save(log_dir + '/model_emb_' + str(epoch) + '.pt')

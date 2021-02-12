@@ -104,7 +104,9 @@ if __name__ == "__main__":
     lr = 0.0005
     params = list(emb_mod.parameters()) + list(ctr_mod.parameters())
 
-    opt = optim.Adam(params, lr=lr) # TODO should i have one optimizer per network ?
+    # opt = optim.Adam(params, lr=lr) # TODO should i have one optimizer per network ?
+    opt = optim.Adam(ctr_mod.parameters(), lr=lr) # TODO should i have one optimizer per network ?
+
     # scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[7, 30, 70], gamma=0.8)
 
     loss_params = {'lambda_embedding': 1.0,
@@ -118,14 +120,14 @@ if __name__ == "__main__":
     #============================================================================================#
 
     epochs = 400000 # 400000
-    resume_epoch = 41000 
+    resume_epoch = 50000 
     SAVE_INTERVAL = 1000
-    EVAL_INTERVAL = 10000
+    EVAL_INTERVAL = 5000
     VAL_INTERVAL = 10
 
     if resume_epoch > 0:
         print("resuming...")
-        meta_learner.resume('./logs/0203-001353', resume_epoch, device)
+        meta_learner.resume('./logs/0-50', resume_epoch, device)
 
     train_writer = SummaryWriter("./runs3/_train")
     valid_writer = SummaryWriter("./runs3/_valid")
@@ -138,9 +140,9 @@ if __name__ == "__main__":
     for epoch in range(resume_epoch + 1, epochs + 1):
         #scheduler.step()
         print("# {}".format(epoch))
-        meta_learner.meta_train(epoch, train_emb=True, train_ctr=True, writer=train_writer, log_interval=2)
+        meta_learner.meta_train(epoch, train_emb=False, train_ctr=True, writer=train_writer, log_interval=2)
         if epoch % VAL_INTERVAL == 0:
-            meta_learner.meta_valid(epoch, train_emb=True, train_ctr=True, writer=valid_writer)
+            meta_learner.meta_valid(epoch, train_emb=False, train_ctr=True, writer=valid_writer)
         if epoch % SAVE_INTERVAL == 0:
             meta_learner.save(log_dir, epoch)
         if epoch % EVAL_INTERVAL == 0 and eval:

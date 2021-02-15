@@ -1,9 +1,17 @@
+import json
+import os.path as osp
+
+def save_params(dir, params):
+    with open(osp.join(dir, "params.json"), 'w') as out:
+        out.write(json.dumps(params, separators=(',\n','\t:\t'), sort_keys=False))
+
 import matplotlib.pyplot as plt
-import itertools
 
 def show_image(im):
     plt.imshow(im, interpolation='nearest')
     plt.show()
+
+import itertools
 
 def chunked_iterable(iterable, size):
     # size must be of type int (not np.int64)

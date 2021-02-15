@@ -4,7 +4,6 @@ import numpy as np
 from network.utils import plot_grad_flow, register_hooks
 
 class MetaLearner(object):
-
     def __init__(self, train_gen, val_gen, emb_mod, ctr_mod, opt, eval_sim=None, eval_emb=None,
                  lambda_embedding=1.0, lambda_support=0.1, lambda_query=0.1):
         self.emb_mod = emb_mod
@@ -132,8 +131,8 @@ class MetaLearner(object):
 
     def resume(self, log_dir, epoch, device):
         self.emb_mod.load(log_dir + '/model_emb_' + str(epoch) + '.pt', device)
-        # self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
-        # self.opt.load_state_dict(torch.load(log_dir + '/model_opt_' + str(epoch) + '.pt', map_location=device))
+        self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
+        self.opt.load_state_dict(torch.load(log_dir + '/model_opt_' + str(epoch) + '.pt', map_location=device))
 
     def save(self, log_dir, epoch):
         self.emb_mod.save(log_dir + '/model_emb_' + str(epoch) + '.pt')

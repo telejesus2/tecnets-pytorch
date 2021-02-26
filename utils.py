@@ -1,7 +1,10 @@
 import json
+import os
 import os.path as osp
 
 def save_params(dir, params):
+    if not(os.path.exists(dir)):
+        os.makedirs(dir)
     with open(osp.join(dir, "params.json"), 'w') as out:
         out.write(json.dumps(params, separators=(',\n','\t:\t'), sort_keys=False))
 

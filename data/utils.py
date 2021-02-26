@@ -4,8 +4,8 @@ import h5py
 import time
 from natsort import natsorted
 
-from rlbench.backend.task import Task
-from rlbench.environment import Environment
+# from rlbench.backend.task import Task
+# from rlbench.environment import Environment
 
 DATASET_RLBENCH = '/home/caor/Documents/datasets/demos/'
 DATASET_MIL = '/home/caor/Documents/datasets/tecnets/'
@@ -34,18 +34,18 @@ LOWDIM_ATTRIBUTES = ['gripper_joint_positions',
                      'joint_velocities',
                      'task_low_dim_state']
 
-def collect_demos(env: Environment, task: Task, taskname, n_loops=50):
-    # TODO: add subtask index, or add file with subtask info (e.g. go to the red)
+# def collect_demos(env: Environment, task: Task, taskname, n_loops=50):
+#     # TODO: add subtask index, or add file with subtask info (e.g. go to the red)
 
-    env.launch()
-    task_env = env.get_task(task)
-    start = time.time()
-    for i in range(n_loops):
-        demos = task_env.get_demos(1000, live_demos=True, max_attempts=1)
-        demos = np.array(demos).flatten()
-        save_to_hdf5(demos, taskname)
-    print("TIME: ", time.time() - start)
-    env.shutdown()
+#     env.launch()
+#     task_env = env.get_task(task)
+#     start = time.time()
+#     for i in range(n_loops):
+#         demos = task_env.get_demos(1000, live_demos=True, max_attempts=1)
+#         demos = np.array(demos).flatten()
+#         save_to_hdf5(demos, taskname)
+#     print("TIME: ", time.time() - start)
+#     env.shutdown()
 
 def save_to_hdf5(demos, taskname, subtask_index=0):
     # save demos to files lowdim.hdf5 and highdim.hdf5

@@ -2,7 +2,6 @@ import os
 import numpy as np
 import random
 from data.dataloader import MetaDataLoader
-from torch.utils.data._utils.collate import default_collate
 
 class EvalEmbedding(object):
 

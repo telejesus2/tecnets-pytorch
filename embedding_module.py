@@ -7,13 +7,13 @@ class EmbeddingModule(object):
 
     def __init__(self, data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device, margin=0.1):
 
-        self.emb_net = EmbeddingNet(list(data_sizes['img_shape'][:2]) + [data_sizes['img_shape'][2] * data_sizes['frames']],
+        self.net = EmbeddingNet(list(data_sizes['img_shape'][:2]) + [data_sizes['img_shape'][2] * data_sizes['frames']],
                        emb_dim, filters, kernels, strides, paddings, dilations, fc_layers,
                        norm_conv='layer', norm_fc=None, act='elu', drop_rate_conv=0.0, drop_rate_fc=0.0)
-        self.emb_net.to(device)
-        # self.emb_net = torch.nn.DataParallel(self.emb_net, device_ids=[0])
+        self.net.to(device)
+        # self.net = torch.nn.DataParallel(self.net, device_ids=[0])
         print("emb_net params")
-        for name, param in self.emb_net.named_parameters():
+        for name, param in self.net.named_parameters():
             print(name, param.shape)
         
         self.device = device
@@ -23,19 +23,19 @@ class EmbeddingModule(object):
         self.support_query_size = 0 # overriden in forward() 
 
     def parameters(self):
-        return self.emb_net.parameters()
+        return self.net.parameters()
 
     def eval(self):
-        self.emb_net.eval()
+        self.net.eval()
 
     def train(self, train=True):
-        self.emb_net.train(train)
+        self.net.train(train)
 
     def save(self, model_path):
-        torch.save(self.emb_net.state_dict(), model_path)
+        torch.save(self.net.state_dict(), model_path)
 
     def load(self, model_path, device):
-        self.emb_net.load_state_dict(torch.load(model_path, map_location=device))
+        self.net.load_state_dict(torch.load(model_path, map_location=device))
 
     def _cos_hinge_loss(self, U_s, q_s, margin=0.1):
         """
@@ -86,7 +86,7 @@ class EmbeddingModule(object):
         embnet_images = torch.cat(torch.unbind(embnet_images, dim=2), dim=-1) # (N, U_n + q_n, h, w, c * frames)
         embnet_images = embnet_images.view([-1] + list(embnet_images.shape[2:])) # (N * (U_n + q_n), h, w, c * frames)
         
-        sentences = self.emb_net(embnet_images) # (N * (U_n + q_n), emb_dim)
+        sentences = self.net(embnet_images) # (N * (U_n + q_n), emb_dim)
         sentences = sentences.view(-1, self.support_query_size, self.emb_dim) # (N, U_n + q_n, emb_dim)
 
         return sentences

@@ -7,13 +7,13 @@ class ControlModule(object):
 
     def __init__(self, data_sizes, emb_dim, filters, kernels, strides, paddings, dilations, fc_layers, device):
 
-        self.ctr_net = ControlNet(data_sizes['img_shape'], data_sizes['state_dim'], data_sizes['action_dim'],
+        self.net = ControlNet(data_sizes['img_shape'], data_sizes['state_dim'], data_sizes['action_dim'],
                        emb_dim, filters, kernels, strides, paddings, dilations, fc_layers,
                        norm_conv='layer', norm_fc=None, act='elu', drop_rate_conv=0.0, drop_rate_fc=0.0)
-        self.ctr_net.to(device)
-        # self.ctr_net = torch.nn.DataParallel(self.ctr_net, device_ids=[0])
+        self.net.to(device)
+        # self.net = torch.nn.DataParallel(self.net, device_ids=[0])
         print("ctr_net params")
-        for name, param in self.ctr_net.named_parameters():
+        for name, param in self.net.named_parameters():
             print(name, param.shape)
 
         self.device = device
@@ -21,19 +21,19 @@ class ControlModule(object):
         self.examples_size = 0 # overriden in forward()
 
     def parameters(self):
-        return self.ctr_net.parameters()
+        return self.net.parameters()
 
     def eval(self):
-        self.ctr_net.eval()
+        self.net.eval()
 
     def train(self, train=True):
-        self.ctr_net.train(train)
+        self.net.train(train)
 
     def save(self, model_path):
-        torch.save(self.ctr_net.state_dict(), model_path)
+        torch.save(self.net.state_dict(), model_path)
 
     def load(self, model_path, device):
-        self.ctr_net.load_state_dict(torch.load(model_path, map_location=device))
+        self.net.load_state_dict(torch.load(model_path, map_location=device))
 
     def _mse_loss(self, actions, labels):
         """
@@ -59,7 +59,7 @@ class ControlModule(object):
 
         states = states.view(-1, states.shape[-1]) # (N * examples_size, state_dim)
 
-        actions = self.ctr_net(ctrnet_images, U_s, states) # (N * examples_size, action_dim)
+        actions = self.net(ctrnet_images, U_s, states) # (N * examples_size, action_dim)
         actions = actions.view(-1, self.examples_size, actions.shape[-1]) # (N, examples_size, action_dim)
 
         return actions

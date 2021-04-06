@@ -11,7 +11,7 @@ sequence_strategy_error = ('{} is not a valid sequence embedding strategy.')
 class MetaDataset(torch.utils.data.Dataset):
 
     def __init__(self, taskname, sequence_strategy, train_or_test,
-                 time_horizon, img_shape, state_dim, action_dim):
+                 time_horizon, img_shape, state_dim, action_dim, control=True):
         """
         :param img_shape: (h, w, c)
         """   
@@ -21,6 +21,7 @@ class MetaDataset(torch.utils.data.Dataset):
         self.img_shape = img_shape
         self.state_dim = state_dim   
         self.action_dim = action_dim
+        self.control = control
 
         self.sequence_strategy = sequence_strategy
         if sequence_strategy not in VALID_SEQUENCE_STRATEGIES:
@@ -82,25 +83,32 @@ class MetaDataset(torch.utils.data.Dataset):
             embnet_states.append(emb_states)
             embnet_actions.append(emb_actions)
 
-        # Grab some random timesteps in one of the support and query trajectories
-        # The first should be a support and the last should be a query
-        s_ctrnet_timesteps = ctrnet_timesteps[: examples // 2]
-        q_ctrnet_timesteps = ctrnet_timesteps[examples // 2 :]
-        ctrnet_images = [self._load_image(images_paths[0], t) for t in s_ctrnet_timesteps]
-        ctrnet_images += [self._load_image(images_paths[-1], t) for t in q_ctrnet_timesteps]
-        ctrnet_states = [states[0][t] for t in s_ctrnet_timesteps]
-        ctrnet_states += [states[-1][t] for t in q_ctrnet_timesteps]
-        ctrnet_actions = [actions[0][t] for t in s_ctrnet_timesteps]
-        ctrnet_actions += [actions[-1][t] for t in q_ctrnet_timesteps]
-
-        return {
+        emb = {
             'embnet_images': self.preprocess_image(np.array(embnet_images)),   # (support_query_size, frames, img_shape)
             'embnet_states': np.array(embnet_states),                           # (support_query_size, frames, state_dim)
             'embnet_actions': np.array(embnet_actions),                         # (support_query_size, frames, action_dim)
-            'ctrnet_images': self.preprocess_image(np.array(ctrnet_images)),   # (examples_size, img_shape)
-            'ctrnet_states': np.array(ctrnet_states),                           # (examples_size, state_dim)
-            'ctrnet_actions': np.array(ctrnet_actions),                         # (examples_size, action_dim)
         }
+
+        if not self.control:
+            return emb
+        else:
+            # Grab some random timesteps in one of the support and query trajectories
+            # The first should be a support and the last should be a query
+            s_ctrnet_timesteps = ctrnet_timesteps[: examples // 2]
+            q_ctrnet_timesteps = ctrnet_timesteps[examples // 2 :]
+            ctrnet_images = [self._load_image(images_paths[0], t) for t in s_ctrnet_timesteps]
+            ctrnet_images += [self._load_image(images_paths[-1], t) for t in q_ctrnet_timesteps]
+            ctrnet_states = [states[0][t] for t in s_ctrnet_timesteps]
+            ctrnet_states += [states[-1][t] for t in q_ctrnet_timesteps]
+            ctrnet_actions = [actions[0][t] for t in s_ctrnet_timesteps]
+            ctrnet_actions += [actions[-1][t] for t in q_ctrnet_timesteps]
+
+            ctr = {    
+                'ctrnet_images': self.preprocess_image(np.array(ctrnet_images)),   # (examples_size, img_shape)
+                'ctrnet_states': np.array(ctrnet_states),                           # (examples_size, state_dim)
+                'ctrnet_actions': np.array(ctrnet_actions),                         # (examples_size, action_dim)
+            }
+            return {**emb, **ctr}
     
     def _sequence_data(self, images_path, states, actions):
         if self.sequence_strategy == 'first':

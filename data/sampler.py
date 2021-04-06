@@ -24,7 +24,7 @@ class MetaSampler(torch.utils.data.sampler.Sampler):
             if num_examples_of_subtask < self.support_query_size:
                 raise RuntimeError(support_query_error.format(self.support_query_size, num_examples_of_subtask))
             sample_indices = np.random.choice(num_examples_of_subtask, self.support_query_size, replace=False)
-            ctrnet_timesteps = np.random.choice(self.dataset.time_horizon, self.examples_size, replace=False)
+            ctrnet_timesteps = [4,5,6] #np.random.choice(self.dataset.time_horizon, self.examples_size, replace=False)
             yield [index, sample_indices, ctrnet_timesteps]
 
     def _index_iterator(self):

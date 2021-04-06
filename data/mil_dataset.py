@@ -4,8 +4,9 @@ from natsort import natsorted
 import pickle
 from PIL import Image
 
-from data.utils import DATASET_MIL as DATASET
 from data.dataset import MetaDataset
+
+DATASET = '/home/caor/Documents/datasets/tecnets/'
 
 
 class MILDataset(MetaDataset):

@@ -18,11 +18,12 @@ class EvalEmbedding(object):
     def evaluate(self, epoch, emb_mod, writer=None):
         inputs = next(iter(self.gen))
         embnet_images = inputs['embnet_images'] # (N, U_n + q_n, frames, h, w, c)
+        embnet_images = embnet_images[:,:,:,:,:,:3]
 
         label_img = embnet_images[:,:,1,:] # (N, U_n + q_n, h, w, c)
         label_img = label_img.view([-1] + list(label_img.shape[2:])) # (N * (U_n + q_n), h, w, c)
         label_img = label_img.permute(0,3,1,2) # (N * (U_n + q_n), c, h, w)
-        label_img = self.dataset.postprocess_image(label_img)
+        label_img = self.dataset.dataset.postprocess_image(label_img)
 
         sentences = emb_mod.forward(inputs, eval=True)['sentences'] # (N, U_n + q_n, emb_dim)
         sentences = sentences.view(-1, sentences.shape[-1]) # (N * (U_n + q_n), emb_dim)

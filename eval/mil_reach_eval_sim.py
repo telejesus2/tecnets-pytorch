@@ -1,6 +1,6 @@
 import sys
-sys.path.append("/home/caor/Documents/gym-mil")
-sys.path.append("/home/caor/Documents/mujoco-py-0.5.7")
+sys.path.append("/home/caor/Documents/ur3/tecnets/reacher_env/gym-mil")
+sys.path.append("/home/caor/Documents/ur3/tecnets/reacher_env/mujoco-py-0.5.7")
 import gym
 import imageio
 
@@ -11,7 +11,7 @@ from torch.utils.data._utils.collate import default_collate
 
 from eval.eval_sim import EvalSim
 
-XML_PATH = '/home/caor/Documents/gym-mil/gym/envs/mujoco/assets/sim_vision_reach_test_xmls/'
+XML_PATH = '/home/caor/Documents/ur3/tecnets/reacher_env/gym-mil/gym/envs/mujoco/assets/sim_vision_reach_test_xmls/'
 def path_to_xml(path):
     return XML_PATH + path.split('/')[-2] + '_cond_' + path[-7] + '.xml'
 
@@ -83,7 +83,3 @@ class EvalSimMilReach(EvalSim):
                 'cond%d.samp0.gif' % int(self.demos[subtask_id][demo_id]['images_path'][-7]))
             video = np.array(observations)
             imageio.mimwrite(record_gif_path, video)
-
-        
-
-

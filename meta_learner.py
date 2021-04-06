@@ -168,9 +168,9 @@ class MetaLearner(object):
     def resume(self, log_dir, epoch, device):
         self.emb_mod.load(log_dir + '/model_emb_' + str(epoch) + '.pt', device)
         self.opt_emb.load_state_dict(torch.load(log_dir + '/model_opt_emb_' + str(epoch) + '.pt', map_location=device))
-        # if self.ctr_mod is not None:
-        #     self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
-        #     self.opt_ctr.load_state_dict(torch.load(log_dir + '/model_opt_ctr_' + str(epoch) + '.pt', map_location=device))
+        if self.ctr_mod is not None:
+            self.ctr_mod.load(log_dir + '/model_ctr_' + str(epoch) + '.pt', device)
+            self.opt_ctr.load_state_dict(torch.load(log_dir + '/model_opt_ctr_' + str(epoch) + '.pt', map_location=device))
 
     def save(self, log_dir, epoch):
         self.emb_mod.save(log_dir + '/model_emb_' + str(epoch) + '.pt')
@@ -186,4 +186,3 @@ class MetaLearner(object):
                 writer.add_scalar('eval_acc', acc, epoch)
         if writer is not None and self.eval_emb is not None:
             self.eval_emb.evaluate(epoch, self.emb_mod, writer=writer)
-

@@ -1,17 +1,19 @@
 import os
 import h5py
 from natsort import natsorted
+import numpy as np
 
-from data.utils import DATASET_RLBENCH as DATASET
 from data.dataset import MetaDataset
+
+DATASET = '/home/caor/Documents/datasets/rlbench_demos/'
 
 
 class RLBenchDataset(MetaDataset):
 
     def __init__(self, taskname, sequence_strategy, train_or_test='train',
-                 time_horizon=17, img_shape=(128, 128, 3), state_dim=6, action_dim=6):
+                 time_horizon=0, img_shape=(128, 128, 6), state_dim=6, action_dim=6, control=True):
         super(RLBenchDataset, self).__init__(taskname, sequence_strategy, train_or_test,
-                 time_horizon, img_shape, state_dim, action_dim)
+                 time_horizon, img_shape, state_dim, action_dim, control)
 
     def _load(self, taskname, train_or_test):
         subtasks = []
@@ -19,7 +21,8 @@ class RLBenchDataset(MetaDataset):
         for subtask in natsorted(os.listdir(task_path)):     
             samples = []
             subtask_path = os.path.join(task_path, subtask)
-            for sample in natsorted(os.listdir(subtask_path)):
+            # for sample in natsorted(os.listdir(subtask_path)):
+            for sample in natsorted(next(os.walk(subtask_path))[1]):
                 sample_path = os.path.join(subtask_path, sample)
                 with h5py.File(sample_path + '/lowdim.hdf5') as f:
                     x = {
@@ -56,7 +59,7 @@ class RLBenchDataset(MetaDataset):
         return hdf5_file['joint_velocities'][...]
 
     def _build_images(self, hdf5_file):
-        return hdf5_file['front_rgb'][...]
+        return np.concatenate([hdf5_file['front_rgb'][...], hdf5_file['wrist_rgb'][...]], axis=-1)
 
     def preprocess_image(self, img):
         # [0, 1] to [-1, 1]

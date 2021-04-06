@@ -2,13 +2,7 @@ import numpy as np
 from datetime import datetime
 import os
 import time
-from numpy.lib.npyio import load
-
-# from rlbench.environment import Environment
-# from rlbench.action_modes import ArmActionMode, ActionMode
-# from rlbench.observation_config import ObservationConfig
-# from rlbench.tasks import ReachTarget
-# from rlbench.backend.observation import Observation    
+from numpy.lib.npyio import load   
 
 import torch
 import torch.optim as optim
@@ -44,15 +38,22 @@ def train(
     # Data
     #============================================================================================#
 
-    train_size = 1500 #1500
-    val_size = 128 #128
-    batch_size = 256 #64
+    # train_size = 1500 #1500
+    # val_size = 128 #128
+    # batch_size = 256 #64
+    # support_size = 2 #2
+    # query_size = 2 #2
+    # examples_size = 10 #2
+
+    train_size = 16 #1500
+    val_size = 4 #128
+    batch_size = 16 #64
     support_size = 2 #2
     query_size = 2 #2
     examples_size = 10 #2
 
-    # training_dataset = RLBenchDataset('ReachTarget', 'first_last')
-    training_dataset = MILDataset('mil_sim_reach', 'first_last')
+    training_dataset = RLBenchDataset('ReachTarget', 'first_last', control=False)
+    # training_dataset = MILDataset('mil_sim_reach', 'first_last')
     train_dataset, val_dataset = random_split(training_dataset, [train_size, val_size])
 
     loader_params = {
@@ -65,6 +66,12 @@ def train(
 
     train_gen = MetaDataLoader(train_dataset, support_size, query_size, examples_size, **loader_params)
     val_gen = MetaDataLoader(val_dataset, support_size, query_size, examples_size, **loader_params)
+
+# ###
+# a = next(iter(train_gen))
+# im = a['embnet_images']
+# print(im.shape)
+
 
     data_params = {
         'support_size': train_gen.support_size,
@@ -87,7 +94,7 @@ def train(
     # test_dataset = RLBenchDataset('ReachTarget', 'first_last', 'test')
 
     eval_sim = EvalSimMilReach(test_dataset, 10, 10, support_size, log_dir=logdir, record_gifs=True, render=True)
-    eval_emb = EvalEmbedding(test_dataset, 10, 4)
+    eval_emb = EvalEmbedding(val_dataset, 4, 10)
 
     #============================================================================================#
     # Networks
@@ -110,8 +117,8 @@ def train(
     emb_mod = EmbeddingModule(data_params, net_params['emb_dim'], net_params['filters'], net_params['kernels'],
         net_params['strides'], net_params['paddings'], net_params['dilations'], net_params['fc_layers'], device,
         net_params['margin'])
-    ctr_mod = ControlModule(data_params, net_params['emb_dim'], net_params['filters'], net_params['kernels'],
-        net_params['strides'], net_params['paddings'], net_params['dilations'], net_params['fc_layers'], device)
+    ctr_mod = None #ControlModule(data_params, net_params['emb_dim'], net_params['filters'], net_params['kernels'],
+        # net_params['strides'], net_params['paddings'], net_params['dilations'], net_params['fc_layers'], device)
 
     #============================================================================================#
     # Optimizer and Learner
@@ -123,7 +130,7 @@ def train(
     
     # params = list(emb_mod.parameters()) + list(ctr_mod.parameters())
     # opt = optim.Adam(params, lr=lr) # TODO should i have one optimizer per network ?
-    opt_ctr = optim.Adam(ctr_mod.parameters(), lr=opt_params['ctr_lr'])
+    opt_ctr = None #optim.Adam(ctr_mod.parameters(), lr=opt_params['ctr_lr'])
     opt_emb = optim.Adam(emb_mod.parameters(), lr=opt_params['emb_lr']) 
 
     # scheduler = optim.lr_scheduler.MultiStepLR(opt, milestones=[7, 30, 70], gamma=0.8)
@@ -132,8 +139,8 @@ def train(
         'lambda_embedding': 1.0,
         'lambda_support': 10, 
         'lambda_query': 10,
-        'train_emb': False,
-        'train_ctr': True}
+        'train_emb': True,
+        'train_ctr': False}
 
     meta_learner = MetaLearner(train_gen, val_gen, emb_mod, opt_emb, ctr_mod, opt_ctr, eval_sim, eval_emb, **train_params)
 
@@ -154,17 +161,17 @@ def train(
     epochs = n_iter # 400000
     resume_epoch = resume_iter 
     SAVE_INTERVAL = 5000
-    EVAL_INTERVAL = 5000
+    EVAL_INTERVAL = 500
     VAL_INTERVAL = 50
     LOG_INTERVAL = 50
 
     if resume_epoch > 0:
         print("resuming...")
         # meta_learner.resume(logdir, resume_epoch, device)
-        meta_learner.resume('logs/emb_17-02-2021_18-32-52/3', resume_epoch, device)
+        meta_learner.resume('logs/ctr_18-02-2021_23-37-37/5', resume_epoch, device)
 
     # meta_learner.meta_train(0, train_emb=False, writer=None, log_interval=10)
-    # meta_learner.evaluate(resume_epoch, writer=emb_writer)
+    # meta_learner.evaluate(resume_epoch, writer=eval_writer)
 
     start = time.time()
     for epoch in range(resume_epoch + 1, epochs + 1):
@@ -188,7 +195,7 @@ def main():
     parser.add_argument('--n_iter', '-ni', type=int, default=200000)
     parser.add_argument('--resume_iter', '-ri', type=int, default=0)
     parser.add_argument('--seed', type=int, default=1)
-    parser.add_argument('--n_experiments', '-e', type=int, default=6)
+    parser.add_argument('--n_experiments', '-e', type=int, default=1)
     args = parser.parse_args()
 
     if not(os.path.exists('logs')):
@@ -213,35 +220,6 @@ if __name__ == "__main__":
     main()
 
 
-
-
-
-
-
-
-
-# ACTION_MODE = [ ArmActionMode.ABS_JOINT_VELOCITY,
-#                 ArmActionMode.DELTA_JOINT_VELOCITY,
-#                 ArmActionMode.ABS_JOINT_POSITION,
-#                 ArmActionMode.DELTA_JOINT_POSITION,
-#                 ArmActionMode.ABS_JOINT_TORQUE,
-#                 ArmActionMode.DELTA_JOINT_TORQUE,
-#                 ArmActionMode.ABS_EE_POSE_WORLD_FRAME,
-#                 ArmActionMode.ABS_EE_POSE_PLAN_WORLD_FRAME,
-#                 ArmActionMode.DELTA_EE_POSE_PLAN_WORLD_FRAME,
-#                 ArmActionMode.DELTA_EE_POSE_WORLD_FRAME,
-#                 ArmActionMode.EE_POSE_EE_FRAME,
-#                 ArmActionMode.EE_POSE_PLAN_EE_FRAME ]
-
-# obs_config = ObservationConfig()
-# obs_config.set_all_high_dim(False)
-# obs_config.front_camera.rgb = True
-# action_mode = ActionMode(ACTION_MODE[0])
-# env = Environment(
-#     action_mode, '', obs_config, headless=True,
-#     robot_configuration='ur3')
-
 # tasks = ['ReachTarget', 'CloseDrawer']
 # tasks = ['CloseBox']
 # attributes = ['front_rgb', 'joint_velocities', 'joint_positions']
-
